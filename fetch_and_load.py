@@ -34,7 +34,7 @@ def transform(raw_file):
     df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed")
 
     # Consistent blank handling: fill text columns' blanks with "unknown"
-    text_cols = df.select_dtypes(include="object").columns
+    text_cols = df.select_dtypes(include=["object", "str"]).columns
     df[text_cols] = df[text_cols].fillna("unknown")
 
     return df
