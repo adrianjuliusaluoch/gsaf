@@ -1,4 +1,4 @@
-name: Fetch Shark Attack Data to BigQuery
+name: Upload Data to BigQuery
 on:
   schedule:
     - cron: '0 6 * * *'  # once daily, 6am UTC
