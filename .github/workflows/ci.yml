@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '**/*.py'
+      - '**/*.txt'
 permissions:
   contents: read
 jobs:
