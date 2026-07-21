@@ -2,7 +2,7 @@ name: CI - Test Pipeline Logic
 on:
   push:
     paths:
-      - '*.py'
+      - '**/*.py'
 permissions:
   contents: read
 jobs:
