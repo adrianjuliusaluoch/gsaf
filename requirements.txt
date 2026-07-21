@@ -1,0 +1,5 @@
+requests
+pandas
+xlrd
+google-cloud-bigquery
+pandas-gbq
