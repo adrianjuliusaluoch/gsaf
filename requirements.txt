@@ -1,5 +1,6 @@
 requests
 pandas
 xlrd
+openpyxl
 google-cloud-bigquery
 pandas-gbq
