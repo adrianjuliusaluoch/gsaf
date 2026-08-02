@@ -30,12 +30,11 @@ def transform(raw_file):
         .str.replace("/", "_")
     )
 
-    # Keep date as plain text — source formatting is too inconsistent to parse reliably
-    df["date"] = df["date"].astype(str)
+    # ELT: load raw, keep everything as string — real typing/cleaning happens downstream
+    df = df.astype(str)
 
-    # Consistent blank handling: fill text columns' blanks with "unknown"
-    text_cols = df.select_dtypes(include=["object", "str"]).columns
-    df[text_cols] = df[text_cols].fillna("unknown")
+    # Consistent blank handling
+    df = df.replace(["None", "nan", "NaT"], "unknown")
 
     return df
 
@@ -44,6 +43,7 @@ def validate(df):
     assert len(df) > 0, "No rows after transform — source may be empty or format changed"
     assert "date" in df.columns, "Missing date column"
     assert "location" in df.columns, "Missing location column"
+    assert "year" in df.columns, "Missing year column"
 
 
 def load_to_bigquery(df):
