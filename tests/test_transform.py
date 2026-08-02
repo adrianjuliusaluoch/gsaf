@@ -40,10 +40,19 @@ def test_junk_columns_dropped(tmp_path):
     assert "original_order" not in df.columns
 
 
-def test_date_parsed(tmp_path):
+def test_date_is_string(tmp_path):
     path = make_sample_excel(tmp_path)
     df = transform(path)
-    assert df["date"].notna().sum() == 5
+    assert df["date"].dtype == object
+    assert df["date"].notna().all()
+
+
+def test_year_is_valid(tmp_path):
+    path = make_sample_excel(tmp_path)
+    df = transform(path)
+    assert df["year"].notna().all()
+    assert (df["year"] >= 1900).all()
+    assert (df["year"] <= 2100).all()
 
 
 def test_blanks_filled(tmp_path):
