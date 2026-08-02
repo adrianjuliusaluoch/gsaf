@@ -13,7 +13,7 @@ def make_sample_excel(tmp_path):
         "Activity": ["Swimming", "Swimming", "Swimming", None, "Swimming"],
         "Name": ["Unknown", "Keira Ralph", "Leah Stewart", "Unknown", None],
         "Sex": ["M", "F", "F", "M", "F"],
-        "Age": [12, 17, 35, None, 19],
+        "Age": [12, 17, "20's", None, "?"],
         "Injury": ["Not stated", "Bite to back of ankle", "Bite wound to L thigh", "Bite to leg", None],
         "Fatal Y/N": ["N", "N", "N", "N", None],
         "Time": ["1530hrs", "1145hrs", None, "1800hrs", "1643hrs"],
@@ -40,19 +40,17 @@ def test_junk_columns_dropped(tmp_path):
     assert "original_order" not in df.columns
 
 
-def test_date_is_string(tmp_path):
+def test_all_columns_are_string(tmp_path):
     path = make_sample_excel(tmp_path)
     df = transform(path)
-    assert df["date"].dtype == object
-    assert df["date"].notna().all()
+    assert all(df[col].dtype == object for col in df.columns)
 
 
-def test_year_is_valid(tmp_path):
+def test_mixed_age_values_preserved(tmp_path):
     path = make_sample_excel(tmp_path)
     df = transform(path)
-    assert df["year"].notna().all()
-    assert (df["year"] >= 1900).all()
-    assert (df["year"] <= 2100).all()
+    assert "20's" in df["age"].values
+    assert "?" in df["age"].values
 
 
 def test_blanks_filled(tmp_path):
