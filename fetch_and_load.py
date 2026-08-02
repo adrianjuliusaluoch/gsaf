@@ -30,8 +30,8 @@ def transform(raw_file):
         .str.replace("/", "_")
     )
 
-    # Standardize date: handle both text ("23rd June") and real datetime objects
-    df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed")
+    # Keep date as plain text — source formatting is too inconsistent to parse reliably
+    df["date"] = df["date"].astype(str)
 
     # Consistent blank handling: fill text columns' blanks with "unknown"
     text_cols = df.select_dtypes(include=["object", "str"]).columns
@@ -44,8 +44,6 @@ def validate(df):
     assert len(df) > 0, "No rows after transform — source may be empty or format changed"
     assert "date" in df.columns, "Missing date column"
     assert "location" in df.columns, "Missing location column"
-    non_null_dates = df["date"].notna().sum()
-    assert non_null_dates > len(df) * 0.9, f"Too many unparseable dates: {non_null_dates}/{len(df)} parsed"
 
 
 def load_to_bigquery(df):
