@@ -43,7 +43,7 @@ def test_junk_columns_dropped(tmp_path):
 def test_all_columns_are_string(tmp_path):
     path = make_sample_excel(tmp_path)
     df = transform(path)
-    assert all(df[col].dtype == object for col in df.columns)
+    assert all(pd.api.types.is_string_dtype(df[col]) for col in df.columns)
 
 
 def test_mixed_age_values_preserved(tmp_path):
