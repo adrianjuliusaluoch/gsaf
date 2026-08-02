@@ -1,3 +1,4 @@
+# Load Packages
 import requests
 import pandas as pd
 from google.cloud import bigquery
