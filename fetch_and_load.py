@@ -30,11 +30,11 @@ def transform(raw_file):
         .str.replace("/", "_")
     )
 
-    # ELT: load raw, keep everything as string — real typing/cleaning happens downstream
-    df = df.astype(str)
+    # Fill blanks first, while values are still real nulls
+    df = df.fillna("unknown")
 
-    # Consistent blank handling
-    df = df.replace(["None", "nan", "NaT"], "unknown")
+    # ELT: everything as string — real typing/cleaning happens downstream
+    df = df.astype(str)
 
     return df
 
