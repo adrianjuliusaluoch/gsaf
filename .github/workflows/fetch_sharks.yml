@@ -1,10 +1,10 @@
-name: Upload Data to BigQuery
+name: Upload Shark Data to BigQuery
+
 on:
-  schedule:
-    - cron: '0 6 * * *'  # once daily, 6am UTC
   workflow_dispatch:
+  
 permissions:
-  contents: read
+  contents: write
 jobs:
   fetch_and_load:
     runs-on: ubuntu-latest
@@ -23,4 +23,21 @@ jobs:
         with:
           credentials_json: '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}'
       - name: Run pipeline
-        run: python fetch_and_load.py
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 15
+          retry_on: error
+          command: python fetch_and_load.py
+      - name: Update and commit fetch_and_load.py
+        run: |
+          # Add or update a timestamp comment at top of file
+          sed -i "1s|^# Last run:.*|# Last run: $(date -u)|; 1t; 1i # Last run: $(date -u)" fetch_and_load.py
+          git config --global user.name "adrianjuliusaluoch"
+          git config --global user.email "adrianjuliusaluoch@gmail.com"
+          git add fetch_and_load.py
+          git commit -m "Keep workflow alive [skip ci]" || echo "No changes to commit"
+          git pull --rebase origin main
+          git push
+        continue-on-error: true
