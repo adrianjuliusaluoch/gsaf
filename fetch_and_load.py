@@ -59,12 +59,43 @@ def create_table_if_missing(df):
         print(f"Created new monthly table: {table_id}")
 
 
-def write_snapshot(df):
+def write_snapshot(df, merge_mode=False):
     create_table_if_missing(df)
+
+    if not merge_mode:
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
+        job = client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result()
+        print(f"Load completed into {table_id}, rows: {len(df)}")
+        return
+
+    # Idempotent upsert: load fresh data into a staging table, then MERGE into
+    # the real one keyed on case_number. Safe to rerun any number of times —
+    # existing cases get updated in place, new ones get inserted, nothing
+    # duplicates regardless of how many times this job runs on the same data.
+    staging_table_id = f"{table_id}_staging"
     job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
-    job = client.load_table_from_dataframe(df, table_id, job_config=job_config)
+    job = client.load_table_from_dataframe(df, staging_table_id, job_config=job_config)
     job.result()
-    print(f"Load completed into {table_id}, rows: {len(df)}")
+
+    key_col = "case_number" if "case_number" in df.columns else df.columns[0]
+    other_cols = [c for c in df.columns if c != key_col]
+    update_clause = ", ".join([f"target.{c} = source.{c}" for c in other_cols])
+    insert_cols = ", ".join(df.columns)
+    insert_values = ", ".join([f"source.{c}" for c in df.columns])
+
+    merge_sql = f"""
+        MERGE `{table_id}` AS target
+        USING `{staging_table_id}` AS source
+        ON target.{key_col} = source.{key_col}
+        WHEN MATCHED THEN
+          UPDATE SET {update_clause}
+        WHEN NOT MATCHED THEN
+          INSERT ({insert_cols}) VALUES ({insert_values})
+    """
+    client.query(merge_sql).result()
+    client.delete_table(staging_table_id)
+    print(f"Idempotent merge completed into {table_id}, source rows: {len(df)}")
 
 
 bigdata = None
@@ -102,12 +133,12 @@ if now.day == 1 or now.day == 2:
         except Exception as e:
             print(f"Error during carry-forward from previous month: {e}")
 
-    write_snapshot(bigdata)
+    write_snapshot(bigdata, merge_mode=True)
 
 else:
     raw = fetch_raw_data()
     bigdata = transform(raw)
     validate(bigdata)
-    write_snapshot(bigdata)
+    write_snapshot(bigdata, merge_mode=True)
 
 print(f"Shark attacks data of shape {bigdata.shape} has been successfully retrieved, saved, and loaded to the BigQuery table.")
