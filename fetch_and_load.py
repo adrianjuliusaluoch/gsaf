@@ -49,96 +49,51 @@ def get_schema(df):
     return [bigquery.SchemaField(col, "STRING") for col in df.columns]
 
 
-def create_table_if_missing(df):
+def write_snapshot(df):
+    """Idempotent upsert without DML: read existing table (if any), dedupe
+    in pandas, then WRITE_TRUNCATE the full result back. Safe to rerun any
+    number of times — existing cases get updated in place, new ones get
+    added, nothing duplicates. Avoids MERGE entirely since DML queries are
+    blocked on BigQuery's free tier without a linked billing account."""
     try:
-        client.get_table(table_id)
+        existing = client.query(f"SELECT * FROM `{table_id}`").to_dataframe()
+        combined = pd.concat([existing, df], ignore_index=True)
     except NotFound:
-        schema = get_schema(df)
-        table = bigquery.Table(table_id, schema=schema)
-        client.create_table(table)
-        print(f"Created new monthly table: {table_id}")
+        combined = df
 
+    key_col = "case_number" if "case_number" in combined.columns else combined.columns[0]
+    combined.drop_duplicates(subset=[key_col], keep="last", inplace=True)
 
-def write_snapshot(df, merge_mode=False):
-    create_table_if_missing(df)
-
-    if not merge_mode:
-        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
-        job = client.load_table_from_dataframe(df, table_id, job_config=job_config)
-        job.result()
-        print(f"Load completed into {table_id}, rows: {len(df)}")
-        return
-
-    # Idempotent upsert: load fresh data into a staging table, then MERGE into
-    # the real one keyed on case_number. Safe to rerun any number of times —
-    # existing cases get updated in place, new ones get inserted, nothing
-    # duplicates regardless of how many times this job runs on the same data.
-    staging_table_id = f"{table_id}_staging"
-    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
-    job = client.load_table_from_dataframe(df, staging_table_id, job_config=job_config)
+    schema = get_schema(combined)
+    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", schema=schema)
+    job = client.load_table_from_dataframe(combined, table_id, job_config=job_config)
     job.result()
-
-    key_col = "case_number" if "case_number" in df.columns else df.columns[0]
-    other_cols = [c for c in df.columns if c != key_col]
-    update_clause = ", ".join([f"target.{c} = source.{c}" for c in other_cols])
-    insert_cols = ", ".join(df.columns)
-    insert_values = ", ".join([f"source.{c}" for c in df.columns])
-
-    merge_sql = f"""
-        MERGE `{table_id}` AS target
-        USING `{staging_table_id}` AS source
-        ON target.{key_col} = source.{key_col}
-        WHEN MATCHED THEN
-          UPDATE SET {update_clause}
-        WHEN NOT MATCHED THEN
-          INSERT ({insert_cols}) VALUES ({insert_values})
-    """
-    client.query(merge_sql).result()
-    client.delete_table(staging_table_id)
-    print(f"Idempotent merge completed into {table_id}, source rows: {len(df)}")
+    print(f"Idempotent load completed into {table_id}, total rows: {len(combined)}")
 
 
 bigdata = None
 
 if now.day == 1 or now.day == 2:
-    try:
-        check_sql = f"SELECT COUNT(*) AS cnt FROM `{table_id}`"
-        check_df = client.query(check_sql).to_dataframe()
-        has_current_month_data = check_df.loc[0, "cnt"] > 0
-    except NotFound:
-        has_current_month_data = False  # Table doesn't exist yet
-
     raw = fetch_raw_data()
     bigdata = transform(raw)
     validate(bigdata)
 
-    if not has_current_month_data:
-        try:
-            prev_month_date = now.replace(day=1) - timedelta(days=1)
-            prev_table_suffix = f"{prev_month_date.year}_{prev_month_date.strftime('%b').lower()}"
-            prev_table_id = f"{PROJECT_ID}.{DATASET}.attacks_{prev_table_suffix}"
+    try:
+        prev_month_date = now.replace(day=1) - timedelta(days=1)
+        prev_table_suffix = f"{prev_month_date.year}_{prev_month_date.strftime('%b').lower()}"
+        prev_table_id = f"{PROJECT_ID}.{DATASET}.attacks_{prev_table_suffix}"
+        prev_data = client.query(f"SELECT * FROM `{prev_table_id}`").to_dataframe()
+        bigdata = pd.concat([prev_data, bigdata], ignore_index=True)
+        print(f"Appended {len(prev_data)} rows from previous month table.")
+    except NotFound:
+        print("No previous month table found, skipping carry-forward.")
 
-            try:
-                prev_data = client.query(f"SELECT * FROM `{prev_table_id}`").to_dataframe()
-                bigdata = pd.concat([prev_data, bigdata], ignore_index=True)
-                print(f"Appended {len(prev_data)} rows from previous month table.")
-            except NotFound:
-                print("No previous month table found, skipping carry-forward.")
-
-            if "case_number" in bigdata.columns:
-                bigdata.drop_duplicates(subset=["case_number"], keep="last", inplace=True)
-            else:
-                bigdata.drop_duplicates(keep="last", inplace=True)
-
-        except Exception as e:
-            print(f"Error during carry-forward from previous month: {e}")
-
-    write_snapshot(bigdata, merge_mode=True)
+    write_snapshot(bigdata)
 
 else:
     raw = fetch_raw_data()
     bigdata = transform(raw)
     validate(bigdata)
-    write_snapshot(bigdata, merge_mode=True)
+    write_snapshot(bigdata)
 
 print(f"Shark attacks data of shape {bigdata.shape} has been successfully retrieved, saved, and loaded to the BigQuery table.")
