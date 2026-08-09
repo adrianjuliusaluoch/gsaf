@@ -1,4 +1,3 @@
-# Last run: Sun Aug  9 04:05:16 UTC 2026
 # Load Packages
 import requests
 import pandas as pd
@@ -10,12 +9,6 @@ from io import BytesIO
 GSAF_URL = "https://sharkattackfile.net/spreadsheets/GSAF5.xls"
 PROJECT_ID = "data-storage-485106"  # reuse your existing project
 DATASET = "sharks"
-
-now = datetime.now()
-table_suffix = f"{now.year}_{now.strftime('%b').lower()}"  # e.g. 2026_aug
-table_id = f"{PROJECT_ID}.{DATASET}.attacks_{table_suffix}"
-
-client = bigquery.Client(project=PROJECT_ID)
 
 
 def fetch_raw_data():
@@ -50,10 +43,10 @@ def get_schema(df):
     return [bigquery.SchemaField(col, "STRING") for col in df.columns]
 
 
-def write_snapshot(df):
+def write_snapshot(df, client, table_id):
     """Idempotent upsert without DML: read existing table (if any), dedupe
     in pandas, then WRITE_TRUNCATE the full result back. Safe to rerun any
-    number of times — existing cases get updated in place, new ones get
+    number of times -- existing cases get updated in place, new ones get
     added, nothing duplicates. Avoids MERGE entirely since DML queries are
     blocked on BigQuery's free tier without a linked billing account."""
     try:
@@ -72,29 +65,39 @@ def write_snapshot(df):
     print(f"Idempotent load completed into {table_id}, total rows: {len(combined)}")
 
 
-bigdata = None
+def run():
+    now = datetime.now()
+    table_suffix = f"{now.year}_{now.strftime('%b').lower()}"  # e.g. 2026_aug
+    table_id = f"{PROJECT_ID}.{DATASET}.attacks_{table_suffix}"
+    client = bigquery.Client(project=PROJECT_ID)
 
-if now.day == 1 or now.day == 2:
-    raw = fetch_raw_data()
-    bigdata = transform(raw)
-    validate(bigdata)
+    bigdata = None
 
-    try:
-        prev_month_date = now.replace(day=1) - timedelta(days=1)
-        prev_table_suffix = f"{prev_month_date.year}_{prev_month_date.strftime('%b').lower()}"
-        prev_table_id = f"{PROJECT_ID}.{DATASET}.attacks_{prev_table_suffix}"
-        prev_data = client.query(f"SELECT * FROM `{prev_table_id}`").to_dataframe()
-        bigdata = pd.concat([prev_data, bigdata], ignore_index=True)
-        print(f"Appended {len(prev_data)} rows from previous month table.")
-    except NotFound:
-        print("No previous month table found, skipping carry-forward.")
+    if now.day == 1 or now.day == 2:
+        raw = fetch_raw_data()
+        bigdata = transform(raw)
+        validate(bigdata)
 
-    write_snapshot(bigdata)
+        try:
+            prev_month_date = now.replace(day=1) - timedelta(days=1)
+            prev_table_suffix = f"{prev_month_date.year}_{prev_month_date.strftime('%b').lower()}"
+            prev_table_id = f"{PROJECT_ID}.{DATASET}.attacks_{prev_table_suffix}"
+            prev_data = client.query(f"SELECT * FROM `{prev_table_id}`").to_dataframe()
+            bigdata = pd.concat([prev_data, bigdata], ignore_index=True)
+            print(f"Appended {len(prev_data)} rows from previous month table.")
+        except NotFound:
+            print("No previous month table found, skipping carry-forward.")
 
-else:
-    raw = fetch_raw_data()
-    bigdata = transform(raw)
-    validate(bigdata)
-    write_snapshot(bigdata)
+        write_snapshot(bigdata, client, table_id)
 
-print(f"Shark attacks data of shape {bigdata.shape} has been successfully retrieved, saved, and loaded to the BigQuery table.")
+    else:
+        raw = fetch_raw_data()
+        bigdata = transform(raw)
+        validate(bigdata)
+        write_snapshot(bigdata, client, table_id)
+
+    print(f"Shark attacks data of shape {bigdata.shape} has been successfully retrieved, saved, and loaded to the BigQuery table.")
+
+
+if __name__ == "__main__":
+    run()
