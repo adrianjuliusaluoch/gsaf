@@ -32,11 +32,13 @@ jobs:
           command: python fetch_and_load.py
       - name: Install dbt
         run: pip install dbt-bigquery
+      - name: Install dbt packages (Elementary)
+        run: dbt deps --profiles-dir ./dbt --project-dir ./dbt
       - name: Set dynamic BigQuery table name
         run: |
           SUFFIX=$(date +'%Y_%b' | tr '[:upper:]' '[:lower:]')
           echo "DBT_SHARK_TABLE=data-storage-485106.sharks.attacks_${SUFFIX}" >> $GITHUB_ENV
-      - name: Run dbt models
+      - name: Run dbt build (models + tests + Elementary)
         uses: nick-fields/retry@v3
         env:
           DBT_SHARK_TABLE: ${{ env.DBT_SHARK_TABLE }}
@@ -45,4 +47,4 @@ jobs:
           max_attempts: 2
           retry_wait_seconds: 30
           retry_on: error
-          command: dbt run --profiles-dir ./dbt --project-dir ./dbt
+          command: dbt build --profiles-dir ./dbt --project-dir ./dbt
