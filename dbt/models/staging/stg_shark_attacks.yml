@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_shark_attacks
+    description: >
+      Cleaned shark attack records for the current month's snapshot table.
+      GSAF's source is always the full historical dataset, so this model
+      always reflects the complete history as of the most recent run --
+      not just "this month's new attacks."
+    columns:
+      - name: date
+        description: Date of the recorded attack, as a raw string from GSAF.
+        tests:
+          - not_null
+
+      - name: location
+        description: Location description of the attack, as reported by GSAF.
+        tests:
+          - not_null
+
+      - name: year
+        description: Year of the attack.
+        tests:
+          - not_null
+
+    # Table-level tests, not tied to one column
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "1 = 1"
+          config:
+            enabled: false
+            # Placeholder: add real cross-column checks here later if
+            # useful, e.g. asserting 'year' is numeric-looking, or that
+            # row count stays within a sane range of the previous run
+            # (Elementary's anomaly tests cover this better than a
+            # hand-written one would, so left disabled for now).
