@@ -1,0 +1,26 @@
+name: 'gsaf'
+version: '1.0.0'
+config-version: 2
+
+# Matches the profile name in profiles.yml -- dbt uses this to find which
+# connection details to use when it runs.
+profile: 'gsaf'
+
+model-paths: ["models"]
+
+models:
+  gsaf:
+    staging:
+      # 'view' keeps this cheap and always fresh -- every query against it
+      # re-reads the current month's table live, no separate storage cost,
+      # no separate refresh step needed beyond the dbt run itself.
+      +materialized: view
+
+# Elementary needs its own schema to write results into (test results,
+# anomaly history, etc.) -- keeping it separate from your actual data
+# models makes it easy to tell "my data" from "Elementary's bookkeeping"
+# at a glance in BigQuery.
+vars:
+  elementary:
+    elementary_database: "data-storage-485106"
+    elementary_schema: "elementary"
