@@ -1,14 +1,14 @@
 name: Upload Shark Data to BigQuery
-
 on:
   workflow_dispatch:
-  
+
 permissions:
   contents: read
+
 jobs:
   fetch_and_load:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -30,3 +30,19 @@ jobs:
           retry_wait_seconds: 30
           retry_on: error
           command: python fetch_and_load.py
+      - name: Install dbt
+        run: pip install dbt-bigquery
+      - name: Set dynamic BigQuery table name
+        run: |
+          SUFFIX=$(date +'%Y_%b' | tr '[:upper:]' '[:lower:]')
+          echo "DBT_SHARK_TABLE=data-storage-485106.sharks.attacks_${SUFFIX}" >> $GITHUB_ENV
+      - name: Run dbt models
+        uses: nick-fields/retry@v3
+        env:
+          DBT_SHARK_TABLE: ${{ env.DBT_SHARK_TABLE }}
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          retry_wait_seconds: 30
+          retry_on: error
+          command: dbt run --profiles-dir ./dbt --project-dir ./dbt
