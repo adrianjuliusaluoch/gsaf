@@ -16,11 +16,11 @@ models:
       # no separate refresh step needed beyond the dbt run itself.
       +materialized: view
 
-# Elementary needs its own schema to write results into (test results,
-# anomaly history, etc.) -- keeping it separate from your actual data
-# models makes it easy to tell "my data" from "Elementary's bookkeeping"
-# at a glance in BigQuery.
-vars:
-  elementary:
-    elementary_database: "data-storage-485106"
-    elementary_schema: "elementary"
+# NOTE: Elementary was removed. Its internal models default to
+# 'incremental' materialization, which compiles to MERGE (DML) --
+# BigQuery sandbox blocks all DML without a linked billing account, and
+# this proved to be baked into Elementary's snapshot-based models with
+# no config override available. Observability is now handled by
+# observability.py, which uses WRITE_APPEND load jobs (not DML) to log
+# freshness/schema-change/row-count-anomaly checks to
+# sharks.pipeline_observability instead.
