@@ -52,3 +52,13 @@ jobs:
           retry_wait_seconds: 30
           retry_on: error
           command: dbt build --profiles-dir ./dbt --project-dir ./dbt
+      - name: Generate dbt docs
+        env:
+          DBT_SHARK_TABLE: ${{ env.DBT_SHARK_TABLE }}
+        run: dbt docs generate --profiles-dir ./dbt --project-dir ./dbt
+      - name: Publish dbt docs to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dbt/target
+          publish_branch: gh-pages
