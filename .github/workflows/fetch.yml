@@ -38,7 +38,7 @@ jobs:
         run: |
           SUFFIX=$(date +'%Y_%b' | tr '[:upper:]' '[:lower:]')
           echo "DBT_SHARK_TABLE=data-storage-485106.sharks.attacks_${SUFFIX}" >> $GITHUB_ENV
-      - name: Run dbt build (models + tests + Elementary)
+      - name: Install packages and run dbt build
         uses: nick-fields/retry@v3
         env:
           DBT_SHARK_TABLE: ${{ env.DBT_SHARK_TABLE }}
@@ -47,4 +47,6 @@ jobs:
           max_attempts: 2
           retry_wait_seconds: 30
           retry_on: error
-          command: dbt build --profiles-dir ./dbt --project-dir ./dbt
+          command: >
+            dbt deps --profiles-dir ./dbt --project-dir ./dbt &&
+            dbt build --profiles-dir ./dbt --project-dir ./dbt
