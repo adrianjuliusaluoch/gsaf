@@ -1,10 +1,11 @@
-# Last run: Wed Aug 26 07:24:37 UTC 2026
+# Last run: Tue Aug 25 18:00:38 UTC 2026
 # Load Packages
 import requests
 import pandas as pd
 from datetime import datetime
 from google.cloud import bigquery
 from io import BytesIO
+from observability import run_observability_checks
 
 GSAF_URL = "https://sharkattackfile.net/spreadsheets/GSAF5.xls"
 PROJECT_ID = "data-storage-485106"
@@ -127,6 +128,13 @@ def run():
     bigdata = transform(raw)
     validate(bigdata)
     write_snapshot(bigdata, client, table_id)
+
+    # Freshness / schema-change / row-count-anomaly checks, logged to
+    # sharks.pipeline_observability. Runs every time write_snapshot()
+    # succeeds -- this is what makes the pipeline Observable, replacing
+    # what Elementary was meant to provide before it hit the sandbox's
+    # DML restriction.
+    run_observability_checks(bigdata, client, table_id)
 
     print(f"Shark attacks data of shape {bigdata.shape} has been successfully retrieved, saved, and loaded to the BigQuery table.")
 
