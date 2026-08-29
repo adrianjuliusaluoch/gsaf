@@ -1,7 +1,4 @@
-packages:
-  # Elementary: free, open-source dbt package. Runs as part of `dbt build`,
-  # writes freshness/schema-change/anomaly results into your own BigQuery
-  # project (the elementary_schema set in dbt_project.yml) -- no external
-  # service, no cost, no data leaving your warehouse.
-  - package: elementary-data/elementary
-    version: [">=0.15.0", "<0.16.0"]
+packages: []
+# NOTE: Elementary was removed -- see dbt_project.yml for why. No dbt
+# packages are currently required for this project. `dbt deps` is still
+# safe to run with an empty list; it just installs nothing.
