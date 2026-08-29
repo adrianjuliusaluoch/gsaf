@@ -23,6 +23,10 @@ jobs:
         with:
           credentials_json: '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}'
       - name: Run pipeline
+        # fetch_and_load.py now also calls run_observability_checks()
+        # internally (via observability.py) right after write_snapshot(),
+        # so freshness/schema-change/row-count-anomaly checks happen
+        # here automatically -- no separate step needed for that.
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 5
@@ -32,13 +36,13 @@ jobs:
           command: python fetch_and_load.py
       - name: Install dbt
         run: pip install dbt-bigquery
-      - name: Install dbt packages (Elementary)
-        run: dbt deps --profiles-dir ./dbt --project-dir ./dbt
       - name: Set dynamic BigQuery table name
         run: |
           SUFFIX=$(date +'%Y_%b' | tr '[:upper:]' '[:lower:]')
           echo "DBT_SHARK_TABLE=data-storage-485106.sharks.attacks_${SUFFIX}" >> $GITHUB_ENV
-      - name: Install packages and run dbt build
+      - name: Run dbt build (models + tests)
+        # No Elementary anymore, so no dbt deps step needed -- packages.yml
+        # is empty, this project has no external dependencies to install.
         uses: nick-fields/retry@v3
         env:
           DBT_SHARK_TABLE: ${{ env.DBT_SHARK_TABLE }}
@@ -47,6 +51,4 @@ jobs:
           max_attempts: 2
           retry_wait_seconds: 30
           retry_on: error
-          command: >
-            dbt deps --profiles-dir ./dbt --project-dir ./dbt &&
-            dbt build --profiles-dir ./dbt --project-dir ./dbt
+          command: dbt build --profiles-dir ./dbt --project-dir ./dbt
