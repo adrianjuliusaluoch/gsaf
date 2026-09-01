@@ -4,4 +4,4 @@
 -- table name it's handed, so dbt never needs to know the name rotates
 -- monthly -- that complexity stays out of the dbt layer completely.
 select *
-from `data-storage-485106.sharks.attacks_2026_aug`
+from `data-storage-485106.sharks.attacks_2026_sep`
